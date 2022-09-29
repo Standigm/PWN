@@ -42,6 +42,7 @@ flake8 = "^5.0.4"
 pydocstyle = "^6.1.1"
 isort = "^5.10.1"
 black = "^22.8.0"
+pip-licenses = "^3.5.4"
 [tool.black]
 line-length = 119
 skip-string-normalization = true
