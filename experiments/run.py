@@ -29,6 +29,7 @@ class GeneID(Enum):
 
     ENSG = 'ensg'
     ENSP = 'ensp'
+    UniProt = 'uniprot'
 
 
 class PPI(Enum):
@@ -36,6 +37,7 @@ class PPI(Enum):
 
     STRING = 'string'
     BioGRID = 'biogrid'
+    IID = 'iid'
 
     def __str__(self):
         return self.value
@@ -89,6 +91,8 @@ def load_ppi(source: PPI = PPI.STRING) -> tuple[GeneID, list[str], sp.spmatrix]:
         idtype = GeneID.ENSP
     elif source == PPI.BioGRID:
         idtype = GeneID.ENSG
+    elif source == PPI.IID:
+        idtype = GeneID.UniProt
     else:
         raise NotImplementedError
     nodeid = pd.read_csv(os.path.join(BASE_DIR, 'ppi', source.value, f'{idtype.value}.txt'), header=None)[0].tolist()
@@ -96,30 +100,27 @@ def load_ppi(source: PPI = PPI.STRING) -> tuple[GeneID, list[str], sp.spmatrix]:
     return idtype, nodeid, adj
 
 
-def load_converters(idtype: GeneID) -> tuple[dict[str, str], Optional[dict[str, str]]]:
-    r"""Load ENSG -> ENSP ID converter.
+def load_converters(source: PPI, idtype: GeneID) -> Optional[dict[str, str]]:
+    r"""Load gene ID converter.
 
     Args:
+        source: Source of the network.
         idtype: Target gene ID.
 
     Returns:
-        Gene symbol converter and gene ID converter.
+        Gene ID converter.
     """
-    symbol_converter, id_converter = {}, {}
-    df = pd.read_csv(os.path.join(BASE_DIR, 'idmap', 'idmap.tsv'), sep='\t', header=None)
-    for _, symbol, ensg, ensp in df.itertuples():
-        if idtype == GeneID.ENSP:
-            id_converter[ensg] = ensp
-            symbol_converter[ensp] = symbol
-        elif idtype == GeneID.ENSG:
-            symbol_converter[ensg] = symbol
-        else:
-            raise NotImplementedError
-    return symbol_converter, (id_converter if idtype == GeneID.ENSP else None)
+    if idtype == GeneID.ENSG:
+        return None
+    df = pd.read_csv(os.path.join(BASE_DIR, 'idmap', f'{source}.tsv'), sep='\t', header=None)
+    id_converter = {}
+    for _, ensg, identifier in df.dropna().drop_duplicates().itertuples():
+        id_converter[ensg] = identifier
+    return id_converter
 
 
 def load_prior(nodeid: list[str], converter: Optional[dict[str, str]]) -> sp.spmatrix:
-    r"""Load prior genes, alinged by given list of ENSP IDs.
+    r"""Load prior genes, alinged by given list of IDs.
 
     Args:
         nodeid: List of IDs.
@@ -133,7 +134,7 @@ def load_prior(nodeid: list[str], converter: Optional[dict[str, str]]) -> sp.spm
 
     for _, prior in pd.read_csv(os.path.join(BASE_DIR, 'prior', 'ensg.txt'), header=None).itertuples():
         if converter is not None:
-            if prior in converter:
+            if prior in converter and converter[prior] in id2idx:
                 priors[0, id2idx[converter[prior]]] = True
         else:
             if prior in id2idx:
@@ -153,16 +154,15 @@ def load_omics(nodeid: list[str], converter: Optional[dict[str, str]]) -> npt.ND
     """
     omics = pd.read_csv(os.path.join(BASE_DIR, 'omics', 'pvalue.csv'), index_col='ensg')
     if converter is not None:
-        converter_df = pd.DataFrame(converter.items(), columns=['ensg', 'ensp']).set_index('ensg')
-        omics = converter_df.join(omics, how='left').reset_index().set_index('ensp').drop('ensg', axis=1)
-    nodeid_df = pd.DataFrame(index=nodeid)
-    return omics.join(nodeid_df, how='right').loc[nodeid].to_numpy()[np.newaxis, ...]
+        converter_df = pd.DataFrame(converter.items(), columns=['ensg', '']).set_index('ensg')
+        omics = converter_df.join(omics, how='left').reset_index().set_index('').drop('ensg', axis=1)
+    df = pd.DataFrame(index=nodeid).join(omics, how='left')
+    return df[~df.index.duplicated()].loc[nodeid].to_numpy()[np.newaxis, ...]
 
 
 def load_and_preproc(
     ppi_source: PPI, num_replicates: int = 1, train_ratios: list[float] = [0.2]
 ) -> tuple[
-    list[str],
     list[str],
     dict[str, sp.spmatrix],
     dict[str, Union[dict[float, npt.NDArray[np.float_]], npt.NDArray[np.float_]]],
@@ -171,15 +171,14 @@ def load_and_preproc(
     r"""Load and preprocess raw data.
 
     Args:
-        ppi_source: Source of PPI; ``string`` or ``biogrid``.
+        ppi_source: Source of PPI; ``string``, ``biogrid``, or ``iid``.
         num_replicates: Number of replicated experiments.
         train_ratios: List of ratio of train set.
     """
     idtype, nodeid, ppi = load_ppi(ppi_source)
-    symbol_converter, id_converter = load_converters(idtype)
+    id_converter = load_converters(ppi_source, idtype)
     prior = load_prior(nodeid, id_converter)
     pvalue = load_omics(nodeid, id_converter)
-    nodename = [symbol_converter.get(nid, '') for nid in nodeid]
 
     adj = {'unweighted': ppi.astype(float), 'curvature': compute_curvature(ppi)}
 
@@ -209,7 +208,7 @@ def load_and_preproc(
         'nlogp_combined': compute_nlogp(pvalue_combined),
     }
 
-    return nodeid, nodename, adj, y, X
+    return nodeid, adj, y, X
 
 
 def run_exp(
@@ -309,7 +308,7 @@ def main(seed: int, ppi: PPI):
     gamma0, gammas = 0.5, np.linspace(0.1, 0.9, 5).tolist()
 
     set_seed(seed)
-    nodeid, nodename, adj, y, X = load_and_preproc(ppi, num_replicates=num_replicates, train_ratios=rhos)
+    nodeid, adj, y, X = load_and_preproc(ppi, num_replicates=num_replicates, train_ratios=rhos)
     adj['GDC'] = methods.gdc(adj['unweighted'])
     for beta in betas:
         if beta != 0.0:
@@ -322,7 +321,6 @@ def main(seed: int, ppi: PPI):
     df = pd.DataFrame(
         {
             'id': nodeid,
-            'name': nodename,
             'prior': y['all'][0],
             'degree': adj['unweighted'].sum(axis=0).A1,
             'curv_mean': [r.data.mean() for r in adj['curvature'].tocsr()],
@@ -391,7 +389,7 @@ def main(seed: int, ppi: PPI):
         'RWR + Prior(RWR) + Curv': run_exp(adj, X, y['all'][0], 'RWR + Prior(RWR) + Curv'),
         'RWR + Prior(RWR, Curv) + Curv': run_exp(adj, X, y['all'][0], 'RWR + Prior(RWR, Curv) + Curv', beta=beta0),
     }
-    df = pd.DataFrame({'id': nodeid, 'name': nodename, **scores})
+    df = pd.DataFrame({'id': nodeid, **scores})
     Result.SCORE.save(df, ppi)
 
     variances = {
@@ -403,7 +401,7 @@ def main(seed: int, ppi: PPI):
         ).std(axis=0)
         for method in ['uKIN', 'RWR']
     }
-    df = pd.DataFrame({'id': nodeid, 'name': nodename, **variances})
+    df = pd.DataFrame({'id': nodeid, **variances})
     Result.VARIANCE.save(df, ppi)
 
 

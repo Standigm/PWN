@@ -24,27 +24,33 @@ def grouper(iterable: Iterable, n: int) -> Iterable[list]:
     return map(lambda xs: list(filter(lambda x: x is not None, xs)), zip_longest(*args))
 
 
-def generate_query(ensp: Iterable[str]) -> str:
+def generate_query(idtype: str, identifiers: Iterable[str]) -> str:
+    if idtype == 'ensp':
+        idtype = 'ensembl_peptide_id'
+    elif idtype == 'uniprot':
+        idtype = 'uniprot_gn_id'
+    else:
+        raise NotImplementedError
     API = 'http://www.ensembl.org/biomart/martservice?query='
-    QUERY = """<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE Query>
+    QUERY = f"""<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE Query>
     <Query virtualSchemaName = "default" formatter = "TSV" header = "0" uniqueRows = "0" count = "" datasetConfigVersion = "0.6">
         <Dataset name = "hsapiens_gene_ensembl" interface = "default" >
-            <Filter name = "ensembl_peptide_id" value = "{}"/>
-            <Attribute name = "hgnc_symbol" />
+            <Filter name = "{idtype}" value = "{{}}"/>
             <Attribute name = "ensembl_gene_id" />
-            <Attribute name = "ensembl_peptide_id" />
+            <Attribute name = "{idtype}" />
         </Dataset>
     </Query>""".replace(
         '\n', ''
     )
-    return re.sub(' +', ' ', f'{API}{QUERY}').replace(' ', '%20').format(','.join(ensp))
+    return re.sub(' +', ' ', f'{API}{QUERY}').replace(' ', '%20').format(','.join(identifiers))
 
 
-ensp = pd.concat([pd.read_csv(f'../ppi/{source}/ensp.txt', header=None) for source in ['string']], ignore_index=True)
-df = pd.concat(
-    [pd.read_csv(generate_query(ensp), sep='\t', header=None) for ensp in tqdm(list(grouper(set(ensp[0]), 256)))]
-).drop_duplicates()
-df.to_csv('idmap.tsv', index=False, header=None, sep='\t')
+for ppi, idtype in {'string': 'ensp', 'iid': 'uniprot'}.items():
+    identifiers = set(pd.read_csv(f'../ppi/{ppi}/{idtype}.txt', header=None)[0])
+    df = pd.concat(
+        [pd.read_csv(generate_query(idtype, ids), sep='\t', header=None) for ids in tqdm(list(grouper(identifiers, 256)))]
+    ).drop_duplicates()
+    df.to_csv(f'{ppi}.tsv', index=False, header=None, sep='\t')
 ```
 
 ## License
