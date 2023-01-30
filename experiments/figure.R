@@ -214,24 +214,39 @@ df1 %>%
   guides(fill = guide_legend(nrow = 4))
 plot_save("exp1", axis.text.x = element_blank())
 
-baseline <- df1 %>%
-  filter(method == "RWR") %>%
-  transmute(ppi, idx, metric, baseline = perf)
 df1 %>%
-  inner_join(baseline) %>%
   group_by(ppi, method, metric) %>%
-  summarise(
-    mean = mean(perf), sd = sd(perf),
-    pvalue = t.test(perf - baseline,
-      alternative = "greater"
-    )$p.value
-  ) %>%
+  summarise(mean = mean(perf), sd = sd(perf)) %>%
   ungroup() %>%
-  transmute(ppi, method, metric,
-    result = sprintf("%f (%s)", mean, format_pvalue(pvalue))
-  ) %>%
+  transmute(ppi, method, metric, result = sprintf("%f ± %f", mean, sd)) %>%
   spread(metric, result) %>%
   write_csv(str_c("table/exp1.csv"))
+
+df1.tests <- df1 %>%
+  transmute(ppi, idx, metric, baseline = method, baseline_perf = perf) %>%
+  inner_join(df1) %>%
+  filter(baseline != method) %>%
+  filter(baseline != "RWR w/ GDC" & method != "RWR w/ GDC") %>%
+  filter(baseline != "mND" & method != "mND") %>%
+  mutate(delta = perf - baseline_perf) %>%
+  group_by(ppi, baseline, method, metric) %>%
+  summarise(
+    mean = mean(delta), pvalue = t.test(delta, alternative = "greater")$p.value
+  )
+df1.tests %>% write_csv(str_c("table/exp1.tests.csv"))
+df1.tests %>%
+  ggplot() +
+  geom_tile(aes(x = method, y = baseline, fill = p.adjust(pvalue, method = "fdr"))) +
+  facet_wrap(~ ppi + metric) +
+  coord_fixed() +
+  guides(fill = guide_colourbar(barwidth = 12)) +
+  scale_y_discrete(limits = rev) +
+  scale_fill_distiller(trans = "log10", palette = "BuPu", limit = c(1e-30, 1e-4), na.value = "gray80") +
+  labs(
+    x = "Method", y = "Baseline", fill = "p-value (adjusted)",
+    caption = "H0: baseline >= method vs. H1: baseline < method"
+  )
+plot_save("exp1.tests", axis.text.x = element_text(angle = 45, vjust = 1.1, hjust = 1.1))
 
 
 df2 <- rawdf %>%
