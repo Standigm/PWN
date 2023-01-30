@@ -46,6 +46,7 @@ class PPI(Enum):
 class Result(Enum):
     """Result files."""
 
+    EDGE = 'edge'
     TOPOLOGY = 'topo'
     SCORE = 'score'
     PERFORMANCE = 'perf'
@@ -317,6 +318,10 @@ def main(seed: int, ppi: PPI):
         else:
             adj[beta] = adj['unweighted'].astype(float, copy=True)
     X = {k: v[0] for k, v in X.items()}
+
+    Z = (adj['curvature'].data - adj['curvature'].data.mean()) / adj['curvature'].data.std()
+    df = pd.concat([pd.DataFrame({'beta': beta, 'weight': sigmoid(beta * Z)}) for beta in np.linspace(0.5, 2.0, 4)])
+    Result.EDGE.save(df, ppi)
 
     df = pd.DataFrame(
         {

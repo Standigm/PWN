@@ -85,6 +85,17 @@ method_labels <- c(
   "PWN"
 )
 
+
+weights <- read_files("edge") %>%
+  mutate(beta = (round(100 * na_if(beta, -Inf)) / 100) %>% as_factor())
+weights %>%
+  ggplot() +
+  geom_histogram(aes(x = weight, y = ..density.., fill = beta), bins = 50) +
+  facet_grid(ppi ~ beta, scale = "free_y", labeller = labeller(.cols = NULL)) +
+  scale_fill_brewer(palette = "RdYlBu") +
+  labs(x = expression("Edge weight of" ~ K), fill = "beta")
+plot_save("weights", height = 0.67, strip.text.x = element_blank())
+
 topo <- read_files("topo") %>% mutate(degree = as.integer(degree))
 topo_kde <- topo %>%
   group_by(ppi) %>%
