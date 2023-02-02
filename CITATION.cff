@@ -1,0 +1,49 @@
+cff-version: 1.2.0
+title: pwn
+message: >-
+  If you use this software, please cite it using the
+  metadata from this file.
+type: software
+authors:
+  - given-names: Seokjin
+    family-names: Han
+    orcid: 'https://orcid.org/0000-0002-1551-0658'
+    email: seokjin.han@standigm.com
+    affiliation: Standigm Inc.
+repository-code: 'https://github.com/Standigm/PWN'
+license: BSD-3-Clause-Clear
+preferred-citation:
+  type: article
+  identifiers:
+    - type: doi
+      value: 10.1186/s12859-023-05227-x
+  journal: "BMC Bioinformatics"
+  month: mar
+  year: 2023
+  volume: 24
+  issue: 1
+  title: >-
+    PWN: Enhanced Random Walk on a Warped Network for Disease
+    Target Prioritization
+  authors:
+    - given-names: Seokjin
+      family-names: Han
+      orcid: 'https://orcid.org/0000-0002-1551-0658'
+      email: seokjin.han@standigm.com
+      affiliation: Standigm Inc.
+    - given-names: Jinhee
+      family-names: Hong
+      email: jenny-hong@naver.com
+      affiliation: Standigm Inc.
+    - given-names: So Jeong
+      family-names: Yun
+      email: sojeong.yun@standigm.com
+      affiliation: Standigm Inc.
+    - given-names: Hee Jung
+      family-names: Koo
+      email: heejung.koo@standigm.com
+      affiliation: 'Standigm UK Co., Ltd'
+    - given-names: Tae Yong
+      family-names: Kim
+      email: taeyong.kim@standigm.com
+      affiliation: Standigm Inc.

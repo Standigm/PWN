@@ -10,6 +10,7 @@ maintainers = ["Standigm Inc. <bioplatform@standigm.com>"]
 description = "Prioritization with a Warped Network"
 keywords = ["Disease-target identification", "Protein-protein interaction", "Random walk", "Machine learning"]
 repository = "https://github.com/Standigm/PWN"
+documentation = "https://doi.org/10.1186/s12859-023-05227-x"
 readme = "README.md"
 license = "BSD-3-Clause-Clear"
 classifiers = [
